@@ -1,3 +1,17 @@
+## Fork Information
+
+This project is a **fork of the [QuickShop-Hikari](https://github.com/QuickShop-Community/QuickShop-Hikari)** plugin.
+
+### Changes in This Fork
+
+**Build Optimizations:**
+- Significantly faster build process by disabling the compilation of unused compatibility modules and test sources.
+- Removed unnecessary submodules from the Maven build pipeline.
+
+**Runtime Improvements:**
+- Faster plugin startup by disabling Crowdin-based translation loading.
+- Disabled runtime dependency downloading through *libby* — all required libraries are now pre-packaged and included directly in the final JAR file.
+
 <!-- Links -->
 
 [codacy]: https://www.codacy.com/gh/Ghost-chu/QuickShop-Hikari/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=Ghost-chu/QuickShop-Hikari&amp;utm_campaign=Badge_Grade
