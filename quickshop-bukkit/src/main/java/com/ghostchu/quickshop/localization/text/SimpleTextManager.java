@@ -91,21 +91,14 @@ public class SimpleTextManager implements TextManager, Reloadable, SubPasteItem 
   private CrowdinOTA crowdinOTA;
 
   public SimpleTextManager(@NotNull final QuickShop plugin) {
-
     this.plugin = plugin;
     plugin.getReloadManager().register(this);
     plugin.getPasteManager().register(plugin.getJavaPlugin(), this);
     this.crowdinHost = PackageUtil.parsePackageProperly("crowdinHost").asString("https://crowdinota.hikari.r2.quickshop-powered.top");
-    if(PackageUtil.parsePackageProperly("enableCrowdinOTA").asBoolean(true)) {
-      try {
-        plugin.logger().info("Please wait us fetch the translation updates from Crowdin OTA service...");
-        this.crowdinOTA = new CrowdinOTA(crowdinHost, new File(Util.getCacheFolder(), "crowdin-ota"), Unirest.primaryInstance());
-      } catch(final Exception e) {
-        plugin.logger().warn("Cannot initialize the CrowdinOTA instance!", e);
-      }
-    } else {
-      plugin.logger().info("[CrowdinOTA] Crowdin Over-The-Air distribution has been disabled.");
-    }
+
+    plugin.logger().info("[CrowdinOTA] Crowdin Over-The-Air distribution has been disabled by configuration.");
+    this.crowdinOTA = null;
+
     load();
   }
 
@@ -123,32 +116,7 @@ public class SimpleTextManager implements TextManager, Reloadable, SubPasteItem 
     // second, load the bundled language files
     loadBundled().forEach(languageFilesManager::deploy);
     // then, load the translations from Crowdin
-    try {
-      if(crowdinOTA != null) {
-        final OTAFileInstance fileInstance = crowdinOTA.getOtaInstance().getFileInstance(CROWDIN_LANGUAGE_FILE_PATH);
-        if(fileInstance != null) {
-          for(final String crowdinCode : fileInstance.getAvailableLocales()) {
-            final String content = fileInstance.getLocaleContentByCrowdinCode(crowdinCode);
-            final String mcCode = crowdinOTA.mapLanguageCode(crowdinCode, LOCALE_MAPPING_SYNTAX).toLowerCase(Locale.ROOT).replace("-", "_");
-            if(content == null) {
-              plugin.logger().warn("Failed to load translation for {}, the content is null.", mcCode);
-              continue;
-            }
-            final YamlConfiguration configuration = new YamlConfiguration();
-            try {
-              configuration.loadFromString(content);
-              languageFilesManager.deploy(mcCode, configuration);
-            } catch(final InvalidConfigurationException e) {
-              plugin.logger().warn("Failed to load translation for {}.", mcCode, e);
-            }
-          }
-        }
-      } else {
-        plugin.logger().info("CrowdinOTA not initialized, skipping for over-the-air translation updates.");
-      }
-    } catch(final Exception e) {
-      plugin.logger().warn("Unable to load Crowdin OTA translations", e);
-    }
+    plugin.logger().info("Crowdin OTA translations loading has been disabled.");
     // and don't forget fix missing
     languageFilesManager.fillMissing(loadBuiltInFallback());
     // finally, load override translations
