@@ -75,7 +75,7 @@ public final class Main extends CompatibilityModule implements Listener {
         return;
       }
     }
-    this.limitPerRegion = getConfig().getInt("max-shops-in-region");
+    this.limitPerRegion = getConfig().getInt("max-shops-in-region", -1);
     super.onLoad();
   }
 

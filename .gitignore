@@ -97,7 +97,7 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 
-target/
+*target/
 
 pom.xml.tag
 pom.xml.releaseBackup
