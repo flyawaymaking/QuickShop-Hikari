@@ -169,8 +169,10 @@ import java.util.Set;
 import java.util.StringJoiner;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
 
 public class QuickShop implements QuickShopAPI, Reloadable {
 
@@ -215,6 +217,8 @@ public class QuickShop implements QuickShopAPI, Reloadable {
   protected MenuHandler menuHandler;
   protected HelperMethods helperMethods;
   private QuickShopInteractionManager interactionManager;
+  @Getter
+  private com.ghostchu.quickshop.menu.config.GuiConfig guiConfig;
   private FoliaLib folia;
   /* Public QuickShop API End */
   private GameVersion gameVersion;
@@ -331,8 +335,6 @@ public class QuickShop implements QuickShopAPI, Reloadable {
   private MetricManager metricManager;
   @Getter
   private RegistryManager registry;
-//    @Getter
-//    private InventoryWrapperUpdateManager invWrapperUpdateManager;
 
   public QuickShop(final QuickShopBukkit javaPlugin, final Logger logger, final Platform platform) {
 
@@ -731,6 +733,9 @@ public class QuickShop implements QuickShopAPI, Reloadable {
       this.menuHandler = new BukkitMenuHandler(javaPlugin, false);
     }
 
+    // Initialize GuiConfig before menus that depend on it
+    this.guiConfig = new com.ghostchu.quickshop.menu.config.GuiConfig(this);
+
     MenuManager.instance().addMenu(new ShopHistoryMenu());
     MenuManager.instance().addMenu(new ShopKeeperMenu());
     MenuManager.instance().addMenu(new ShopBrowseMenu());
@@ -778,6 +783,7 @@ public class QuickShop implements QuickShopAPI, Reloadable {
     loadCommandHandler();
 //        this.invWrapperUpdateManager = new InventoryWrapperUpdateManager(this);
 //        this.invWrapperUpdateManager.register();
+
     this.shopManager = new SimpleShopManager(this);
     // Limit
     //this.registerLimitRanks();
@@ -1027,9 +1033,7 @@ public class QuickShop implements QuickShopAPI, Reloadable {
   private void registerTasks() {
 
     calendarWatcher = new CalendarWatcher(this);
-    // shopVaildWatcher.runTaskTimer(this, 0, 20 * 60); // Nobody use it
     signUpdateWatcher.start(1, 10);
-    //shopContainerWatcher.runTaskTimer(this, 0, 5); // Nobody use it
     if(logWatcher != null) {
       logWatcher.start(10, 10);
       logger.info("Log actions is enabled. Actions will be logged in the qs.log file!");
@@ -1179,9 +1183,32 @@ public class QuickShop implements QuickShopAPI, Reloadable {
     if(getShopManager() != null) {
       logger.info("Saving all in-memory changed shops...");
       final List<CompletableFuture<Void>> futures = getShopManager().getAllShops().stream().filter(Shop::isDirty).map(Shop::update).toList();
+
+      logger.info("Shops needed saved: " + futures.size());
       final CompletableFuture<?>[] completableFutures = futures.toArray(new CompletableFuture<?>[0]);
-      CompletableFuture.allOf(completableFutures)
-              .join();
+
+      try {
+
+        CompletableFuture.allOf(completableFutures)
+                .orTimeout(15, TimeUnit.SECONDS)
+                .join();
+
+      } catch(final CompletionException ex) {
+
+        logger.info("Timed out, running saving synchronously to determine shop with issue.", ex);
+        for(final Shop shop : getShopManager().getAllShops()) {
+
+          if(shop.isDirty()) {
+            try {
+
+              shop.updateSync();
+            } catch(final RuntimeException re) {
+
+              logger.warn("Issue occurred while saving a shop. This may cause data loss. Please check the logs for more information. ID: " + shop.getShopId() + " Location: " + shop.getLocation(), re);
+            }
+          }
+        }
+      }
     }
     /* Remove all display items, and any dupes we can find */
     if(shopManager != null) {

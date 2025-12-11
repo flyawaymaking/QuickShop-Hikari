@@ -16,15 +16,19 @@ import com.ghostchu.quickshop.api.inventory.InventoryWrapper;
 import com.ghostchu.quickshop.api.inventory.InventoryWrapperManager;
 import com.ghostchu.quickshop.api.localization.text.ProxiedLocale;
 import com.ghostchu.quickshop.api.obj.QUser;
+import com.ghostchu.quickshop.api.shop.IShopLayoutProvider;
+import com.ghostchu.quickshop.api.shop.IShopType;
 import com.ghostchu.quickshop.api.shop.Info;
 import com.ghostchu.quickshop.api.shop.PriceLimiter;
 import com.ghostchu.quickshop.api.shop.PriceLimiterCheckResult;
 import com.ghostchu.quickshop.api.shop.Shop;
 import com.ghostchu.quickshop.api.shop.ShopChunk;
 import com.ghostchu.quickshop.api.shop.ShopManager;
-import com.ghostchu.quickshop.api.shop.ShopType;
 import com.ghostchu.quickshop.api.shop.cache.ShopCacheNamespacedKey;
 import com.ghostchu.quickshop.api.shop.permission.BuiltInShopPermission;
+import com.ghostchu.quickshop.api.shop.type.BuyingType;
+import com.ghostchu.quickshop.api.shop.type.FrozenType;
+import com.ghostchu.quickshop.api.shop.type.SellingType;
 import com.ghostchu.quickshop.common.util.CalculateUtil;
 import com.ghostchu.quickshop.common.util.CommonUtil;
 import com.ghostchu.quickshop.common.util.RomanNumber;
@@ -94,6 +98,10 @@ import java.util.concurrent.TimeoutException;
  */
 public class SimpleShopManager extends AbstractShopManager implements ShopManager, Reloadable {
 
+  public static final String DEFAULT_TYPE = "BUYING";
+
+  protected final Map<Integer, IShopType> shopTypes = Maps.newConcurrentMap();
+
   protected final InteractiveManager interactiveManager;
   @Getter
   @Nullable
@@ -116,6 +124,12 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
   private boolean sendStockMessageToStaff;
   private boolean useShopableChecks;
   private boolean useShopCache;
+  private IShopLayoutProvider shopLayoutProvider;
+
+  //Initialize our shop types
+  public static final BuyingType BUYING_TYPE = new BuyingType();
+  public static final SellingType SELLING_TYPE = new SellingType();
+  public static final FrozenType FROZEN_TYPE = new FrozenType();
 
   public SimpleShopManager(@NotNull final QuickShop plugin) {
 
@@ -123,6 +137,7 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
     Util.ensureThread(false);
     plugin.getReloadManager().register(this);
     this.interactiveManager = new InteractiveManager(plugin);
+    this.shopLayoutProvider = new SimpleShopLayoutProvider(plugin);
     init();
   }
 
@@ -133,10 +148,16 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
     return this.interactiveManager;
   }
 
+
   @Override
   public void init() {
 
     super.init();
+    Log.debug("Loading built-in shop types.");
+    addShopType(BUYING_TYPE);
+    addShopType(SELLING_TYPE);
+    addShopType(FROZEN_TYPE);
+
     Log.debug("Loading caching tax account...");
     final String taxAccount = plugin.getConfig().getString("tax-account", "tax");
     if(!taxAccount.isEmpty()) {
@@ -170,6 +191,70 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
     this.useShopableChecks = PackageUtil.parsePackageProperly("shoppableChecks").asBoolean(false);
     this.useShopCache = plugin.getConfig().getBoolean("shop.use-cache", true);
 
+  }
+
+  /**
+   * Provides an instance of {@code IShopLayoutProvider} responsible for managing shop layouts.
+   *
+   * @return an implementation of {@code IShopLayoutProvider} that handles the shop layout
+   * configuration.
+   */
+  @Override
+  public IShopLayoutProvider shopLayoutProvider() {
+
+    return shopLayoutProvider;
+  }
+
+  /**
+   * Sets the shop layout provider to customize the layout of the shop.
+   *
+   * @param provider the instance of IShopLayoutProvider that defines the layout of the shop
+   */
+  @Override
+  public void shopLayoutProvider(final IShopLayoutProvider provider) {
+    this.shopLayoutProvider = provider;
+  }
+
+  /**
+   * Retrieves a map containing shop types.
+   *
+   * @return a map where the key is an integer representing the shop type ID, and the value is an
+   * object implementing the IShopType interface, which provides details about a shop type.
+   */
+  @Override
+  public Map<Integer, IShopType> shopTypes() {
+
+    return shopTypes;
+  }
+
+  /**
+   * Retrieves the shop type associated with the specified ID. If no shop type is found, returns a
+   * default shop type.
+   *
+   * @param id the identifier for the desired shop type
+   *
+   * @return the shop type associated with the given ID, or a default shop type if none exists
+   */
+  @Override
+  public @NotNull IShopType shopTypeOrDefault(final int id) {
+
+    final Optional<IShopType> type = shopType(id);
+    return type.orElse(SELLING_TYPE);
+  }
+
+  /**
+   * Retrieves the shop type associated with the given identifier, or returns a default shop type if
+   * no match is found.
+   *
+   * @param identifier the unique identifier for the shop type to retrieve
+   *
+   * @return the corresponding IShopType if found, or a default IShopType if no match exists
+   */
+  @Override
+  public @NotNull IShopType shopTypeOrDefault(final String identifier) {
+
+    final Optional<IShopType> type = shopType(identifier);
+    return type.orElse(SELLING_TYPE);
   }
 
   @Override
@@ -375,8 +460,8 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
         }
         final ContainerShop shop = new ContainerShop(plugin, -1, info.getLocation(),
                                                      priceDouble, info.getItem(), createQUser, false,
-                                                     ShopType.SELLING, new YamlConfiguration(), null, !plugin.getConfig().getBoolean("shop.display-default", true),
-                                                     null, plugin.getJavaPlugin().getName(), 
+                                                     SELLING_TYPE, new YamlConfiguration(), null, !plugin.getConfig().getBoolean("shop.display-default", true),
+                                                     null, plugin.getJavaPlugin().getName(),
                                                      symbolLink,
                                                      null, Collections.emptyMap(), new QSBenefitProvider());
         createShop(shop, info.getSignBlock(), info.isBypassed());
@@ -489,6 +574,7 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
     notifyBought(sellerQUser, shop, amount, stock, transaction.tax().doubleValue(), total);
     return true;
   }
+
 
   /**
    * Removes all shops from memory and the world. Does not delete them from the database. Call this
@@ -730,6 +816,7 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
     shop.setSignText(plugin.text().findRelativeLanguages(shop.getOwner(), false));
   }
 
+
   @Override
   public double getTax(@NotNull final Shop shop, @NotNull final QUser p) {
 
@@ -792,6 +879,7 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
       }
     });
   }
+
 
   private void refundShop(final Shop shop) {
 
@@ -937,18 +1025,18 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
       boolean shouldDisplayEnchantments = plugin.getConfig().getBoolean("shop.info-panel.show-enchantments");
       boolean shouldDisplayPotionEffects = plugin.getConfig().getBoolean("shop.info-panel.show-effects");
 
-      if(respectItemFlag) {
-        if(items.hasItemMeta()) {
-          final ItemMeta shopItemMeta = shop.getItem().getItemMeta();
-          shouldDisplayEnchantments = !shopItemMeta.hasItemFlag(ItemFlag.HIDE_ENCHANTS);
-          ItemFlag hidePotionEffect;
-          try {
-            hidePotionEffect = ItemFlag.valueOf("HIDE_ADDITIONAL_TOOLTIP");
-          } catch(final Exception e) {
-            hidePotionEffect = ItemFlag.valueOf("HIDE_POTION_EFFECTS"); // Remove this when we dropped 1.20.x support
-          }
-          shouldDisplayPotionEffects = !shopItemMeta.hasItemFlag(hidePotionEffect);
+      if(respectItemFlag && items.hasItemMeta()) {
+
+        final ItemMeta shopItemMeta = shop.getItem().getItemMeta();
+        shouldDisplayEnchantments = !shopItemMeta.hasItemFlag(ItemFlag.HIDE_ENCHANTS);
+
+        ItemFlag hidePotionEffect;
+        try {
+          hidePotionEffect = ItemFlag.valueOf("HIDE_ADDITIONAL_TOOLTIP");
+        } catch(final Exception e) {
+          hidePotionEffect = ItemFlag.valueOf("HIDE_POTION_EFFECTS"); // Remove this when we dropped 1.20.x support
         }
+        shouldDisplayPotionEffects = !shopItemMeta.hasItemFlag(hidePotionEffect);
       }
 
       if(shouldDisplayEnchantments) {
@@ -1078,6 +1166,7 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
     return signBlockState;
   }
 
+
   private int buyingShopAllCalc(@NotNull final EconomyProvider eco, @NotNull final Shop shop, @NotNull final Player p) {
 
     int amount;
@@ -1121,6 +1210,7 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
     }
     return amount;
   }
+
 
   @Override
   public @Nullable Shop getShopIncludeAttachedViaCache(@Nullable final Location loc) {
