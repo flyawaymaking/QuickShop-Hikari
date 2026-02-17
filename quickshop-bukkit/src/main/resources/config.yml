@@ -30,7 +30,7 @@ mojangapi-mirror: 0
 crowdin-host: "https://crowdinota.hikari.r2.quickshop-powered.top"
 
 #Use Crowdin OTA to update language files?
-use-crowdin-ota: true
+use-crowdin-ota: false
 
 #This enables the developer mode, do not touch this if you don't not know what it does!
 dev-mode: false
