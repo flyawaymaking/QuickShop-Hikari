@@ -8,7 +8,6 @@ import com.ghostchu.quickshop.api.shop.Shop;
 import com.ghostchu.quickshop.api.shop.permission.BuiltInShopPermission;
 import com.ghostchu.quickshop.util.MsgUtil;
 import com.ghostchu.quickshop.util.Util;
-import io.papermc.lib.PaperLib;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.ChatColor;
@@ -24,6 +23,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 
 public class SubCommand_Find implements CommandHandler<Player> {
 
@@ -41,6 +41,14 @@ public class SubCommand_Find implements CommandHandler<Player> {
       plugin.text().of(sender, "command.no-type-given").send();
       return;
     }
+
+    //cooldown to prevent data abuse.
+    final UUID uuid = sender.getUniqueId();
+    final long cooldown = plugin.getShopManager().findCooldown().getOrDefault(uuid, 0L);
+    if(cooldown != 0L && cooldown > System.currentTimeMillis()) {
+      return;
+    }
+    plugin.getShopManager().findCooldown().put(uuid, System.currentTimeMillis() + plugin.getConfig().getLong("shop.finding.cooldown", 20L) * 1000);
 
     final Location loc = sender.getLocation().clone();
     final Vector playerVector = loc.toVector();
@@ -115,15 +123,15 @@ public class SubCommand_Find implements CommandHandler<Player> {
     }
 
     //Okay now all shops is our wanted shop in Map
-
-    final List<Map.Entry<Shop, Double>> sortedShops = aroundShops.entrySet().stream().sorted(Map.Entry.<Shop, Double> comparingByValue(Double::compare).reversed()).toList();
+    final List<Map.Entry<Shop, Double>> sortedShops = aroundShops.entrySet().stream().sorted(Map.Entry.<Shop, Double>comparingByValue(Double::compare).reversed()).toList();
 
     //Function
     if(usingOldLogic) {
+
       final Map.Entry<Shop, Double> closest = sortedShops.getFirst();
       final Location lookAt = closest.getKey().getLocation().clone().add(0.5, 0.5, 0.5);
-      PaperLib.teleportAsync(sender, Util.lookAt(sender.getEyeLocation(), lookAt).add(0, -1.62, 0),
-                             PlayerTeleportEvent.TeleportCause.UNKNOWN);
+      sender.teleportAsync(Util.lookAt(sender.getEyeLocation(), lookAt).add(0, -1.62, 0), PlayerTeleportEvent.TeleportCause.UNKNOWN);
+
       plugin.text().of(sender, "nearby-shop-this-way", closest.getValue().intValue()).send();
     } else {
       plugin.text().of(sender, "nearby-shop-header", lookFor).send();
@@ -132,10 +140,12 @@ public class SubCommand_Find implements CommandHandler<Player> {
         final Shop shop = shopDoubleEntry.getKey();
         final Location location = shop.getLocation();
         ItemStack previewItemStack = shop.getItem().clone();
+
         final ItemPreviewComponentPrePopulateEvent previewComponentPrePopulateEvent = new ItemPreviewComponentPrePopulateEvent(previewItemStack, sender);
+
         previewComponentPrePopulateEvent.callEvent();
         previewItemStack = previewComponentPrePopulateEvent.getItemStack();
-        //  "nearby-shop-entry": "&a- Info:{0} &aPrice:&b{1} &ax:&b{2} &ay:&b{3} &az:&b{4} &adistance: &b{5} &ablock(s)"
+
         Component entryComponent = plugin.text().of(sender, "nearby-shop-entry",
                                                     shop.getSignText(plugin.text().findRelativeLanguages(sender)).get(1),
                                                     shop.getSignText(plugin.text().findRelativeLanguages(sender)).get(3),

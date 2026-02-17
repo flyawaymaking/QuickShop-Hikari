@@ -4,6 +4,7 @@ import com.ghostchu.quickshop.api.economy.EconomyProvider;
 import com.ghostchu.quickshop.api.inventory.InventoryWrapper;
 import com.ghostchu.quickshop.api.obj.QUser;
 import com.ghostchu.quickshop.api.shop.cache.ShopInventoryCountCache;
+import com.ghostchu.quickshop.api.shop.tax.TaxManager;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -37,11 +38,27 @@ public interface ShopManager {
   IShopLayoutProvider shopLayoutProvider();
 
   /**
+   * Retrieves an instance of the TaxManager class, responsible for handling tax-related computations
+   * and operations within the application.
+   *
+   * @return an instance of TaxManager that manages tax calculations and logic.
+   */
+  TaxManager taxManager();
+
+  /**
    * Sets the shop layout provider to customize the layout of the shop.
    *
    * @param provider the instance of IShopLayoutProvider that defines the layout of the shop
    */
   void shopLayoutProvider(final IShopLayoutProvider provider);
+
+  /**
+   * Retrieves a map of cooldown information where the keys represent unique identifiers (UUIDs),
+   * and the values represent the corresponding timestamps indicating when the cooldown expires.
+   *
+   * @return A map mapping UUIDs to their cooldown expiration timestamps in milliseconds.
+   */
+  Map<UUID, Long> findCooldown();
 
   /**
    * Retrieves a map containing shop types.
@@ -156,15 +173,6 @@ public interface ShopManager {
           @NotNull Info info,
           @NotNull Shop shop,
           int amount);
-
-//    /**
-//     * Adds a shop to the world. Does NOT require the chunk or world to be loaded Call shop.onLoad
-//     * by yourself
-//     *
-//     * @param world The name of the world
-//     * @param shop  The shop to add
-//     */
-//    void addShop(@NotNull String world, @NotNull Shop shop);
 
   void bakeShopRuntimeRandomUniqueIdCache(@NotNull Shop shop);
 
@@ -414,8 +422,12 @@ public interface ShopManager {
    * @param p    The player
    *
    * @return The tax of the shop
+   * @deprecated no longer apart of the enhanced tax system
    */
-  double getTax(@NotNull Shop shop, @NotNull QUser p);
+  @Deprecated(since = "6.2.0.11", forRemoval = true)
+  default double getTax(@NotNull Shop shop, @NotNull QUser p) {
+    return 0.0;
+  }
 
   void handleChat(@NotNull Player player, @NotNull String msg);
 
